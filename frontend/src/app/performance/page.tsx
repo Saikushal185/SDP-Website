@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { FaChartBar, FaShieldAlt, FaTrophy } from "react-icons/fa";
+import { EmptyState, PageIntro, Panel, SiteContainer } from "@/components/site/ui";
 import { fetchMetrics, type MetricsData } from "@/lib/api";
 import {
   buildPlainLanguageMetricCards,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/prediction-utils";
 
 const metricKeys = ["accuracy", "recall", "precision"] as const;
-const chartColors = ["#2563eb", "#16a34a", "#f59e0b"];
+const chartColors = ["#1d4850", "#55737a", "#8d6234"];
 
 export default function PerformancePage() {
   const [data, setData] = useState<MetricsData | null>(null);
@@ -38,18 +39,36 @@ export default function PerformancePage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-10">
-        <div className="bg-red-50 text-red-600 rounded-xl p-6 text-center">
-          {error}
-        </div>
+      <div className="pb-20">
+        <PageIntro
+          eyebrow="Performance review"
+          title="Saved benchmark metrics are currently unavailable."
+          description="The page can still render once the backend metrics endpoint is reachable."
+        />
+        <SiteContainer className="pt-10">
+          <EmptyState
+            icon={<FaChartBar />}
+            title="Unable to load performance metrics"
+            description={error}
+          />
+        </SiteContainer>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-10 text-center text-gray-400">
-        Loading performance data...
+      <div className="pb-20">
+        <PageIntro
+          eyebrow="Performance review"
+          title="Loading saved model benchmarks."
+          description="This route turns the evaluation metrics into a cleaner story for non-technical reviewers."
+        />
+        <SiteContainer className="pt-10">
+          <Panel className="text-center text-sm text-[var(--text-muted)]">
+            Loading performance data...
+          </Panel>
+        </SiteContainer>
       </div>
     );
   }
@@ -75,217 +94,222 @@ export default function PerformancePage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Model Performance</h1>
-        <p className="text-gray-500 mt-1">
-          A simpler view of how well the model performed on the study data.
-        </p>
-      </div>
+    <div className="pb-20">
+      <PageIntro
+        eyebrow="Performance review"
+        title="Benchmark evidence for the deployed model set."
+        description="The page now leads with a plain-language interpretation of the saved study metrics before exposing the original technical comparison table."
+        meta={[
+          { label: "Best model", value: formatModelName(bestModelKey) },
+          { label: "Compared models", value: `${modelKeys.length}` },
+          {
+            label: "Best accuracy",
+            value: `${(bestModelMetrics.accuracy * 100).toFixed(1)}%`,
+          },
+        ]}
+      />
 
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 mb-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center shrink-0">
-            <FaTrophy className="text-blue-500 text-lg" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-blue-600 mb-1">
-              Best model for this study
-            </p>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {formatModelName(bestModelKey)}
-            </h2>
-            <p className="text-gray-500 mt-2 max-w-2xl">
-              This was the strongest overall model in the saved evaluation
-              results, so the app treats it as the default benchmark when
-              comparing performance.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4 mt-6">
-          {bestModelCards.map((card, index) => (
-            <div
-              key={card.key}
-              className="rounded-2xl border border-gray-100 bg-gray-50 p-5"
-            >
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
-                style={{
-                  backgroundColor: `${chartColors[index]}14`,
-                  color: chartColors[index],
-                }}
-              >
-                <FaShieldAlt />
+      <SiteContainer className="space-y-6 pt-10">
+        <Panel tone="strong">
+          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[rgba(248,245,239,0.08)] text-[#f8f5ef]">
+                  <FaTrophy />
+                </div>
+                <div>
+                  <p className="text-[0.72rem] uppercase tracking-[0.2em] text-[rgba(248,245,239,0.44)]">
+                    Best model for this study
+                  </p>
+                  <h2 className="mt-2 font-display text-4xl text-[#f8f5ef]">
+                    {formatModelName(bestModelKey)}
+                  </h2>
+                </div>
               </div>
-              <p className="text-sm font-medium text-gray-500">{card.label}</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
-                {(card.value * 100).toFixed(1)}%
-              </p>
-              <p className="text-sm text-gray-500 mt-3">{card.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 mb-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-            <FaChartBar className="text-blue-500" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800">
-              Simple model comparison
-            </h2>
-            <p className="text-sm text-gray-500">
-              These three measures are the easiest way to compare how the models
-              performed.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          {metricKeys.map((metricKey) => (
-            <div
-              key={metricKey}
-              className="rounded-2xl border border-gray-100 bg-white p-4"
-            >
-              <p className="font-semibold text-gray-800">
-                {metricCopy[metricKey].label}
-              </p>
-              <p className="text-sm text-gray-500 mt-2">
-                {metricCopy[metricKey].description}
+              <p className="mt-6 max-w-xl text-sm leading-7 text-[rgba(248,245,239,0.74)]">
+                This model performed best in the saved evaluation output, so the
+                restyled interface treats it as the default reference point for
+                faculty review and live demos.
               </p>
             </div>
-          ))}
-        </div>
 
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={comparisonData}
-              margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 12 }}
-                label={{
-                  value: "Score (%)",
-                  angle: -90,
-                  position: "insideLeft",
-                  fontSize: 12,
-                }}
-              />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
-                }}
-                formatter={(value, name) => [
-                  `${Number(value).toFixed(1)}%`,
-                  formatModelName(String(name)),
-                ]}
-              />
-              {modelKeys.map((modelKey, index) => (
-                <Bar
-                  key={modelKey}
-                  dataKey={modelKey}
-                  name={formatModelName(modelKey)}
-                  radius={[8, 8, 0, 0]}
-                  fill={chartColors[index % chartColors.length]}
+            <div className="grid gap-4 sm:grid-cols-3">
+              {bestModelCards.map((card, index) => (
+                <div
+                  key={card.key}
+                  className="rounded-[24px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-5"
                 >
-                  {comparisonData.map((entry) => (
-                    <Cell
-                      key={`${modelKey}-${String(entry.label)}`}
-                      fill={chartColors[index % chartColors.length]}
-                    />
-                  ))}
-                </Bar>
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <details className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-        <summary className="cursor-pointer text-lg font-semibold text-gray-800">
-          Advanced details
-        </summary>
-        <p className="text-sm text-gray-500 mt-3 mb-4">
-          These are the original technical evaluation metrics used in the saved
-          study results.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-sm font-semibold text-gray-600 pb-4">
-                  Model
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  Accuracy
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  Precision
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  Recall
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  F1 Score
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  AUC
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {modelKeys.map((modelKey) => {
-                const metrics = data.models[modelKey];
-                const isBest = modelKey === bestModelKey;
-                return (
-                  <tr
-                    key={modelKey}
-                    className={`border-b border-gray-50 ${
-                      isBest ? "bg-blue-50/50" : ""
-                    }`}
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-full"
+                    style={{
+                      backgroundColor: `${chartColors[index]}24`,
+                      color: "#f8f5ef",
+                    }}
                   >
-                    <td className="py-4">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium text-gray-800">
-                          {formatModelName(modelKey)}
-                        </span>
-                        {isBest && (
-                          <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                            Best
+                    <FaShieldAlt />
+                  </div>
+                  <p className="mt-5 text-sm font-medium text-[rgba(248,245,239,0.68)]">
+                    {card.label}
+                  </p>
+                  <p className="mt-3 font-display text-4xl text-[#f8f5ef]">
+                    {(card.value * 100).toFixed(1)}%
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-[rgba(248,245,239,0.68)]">
+                    {card.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+              <FaChartBar />
+            </div>
+            <div>
+              <p className="eyebrow">Readable comparison</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--text-strong)]">
+                Plain-language metrics first
+              </h2>
+              <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
+                These three measures give reviewers the quickest way to compare
+                the saved models without reading a dense technical table first.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {metricKeys.map((metricKey) => (
+              <div
+                key={metricKey}
+                className="rounded-[24px] border border-[var(--border-subtle)] bg-white/60 p-5"
+              >
+                <p className="text-lg font-semibold text-[var(--text-strong)]">
+                  {metricCopy[metricKey].label}
+                </p>
+                <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+                  {metricCopy[metricKey].description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={comparisonData}
+                margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(17,33,38,0.08)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 12 }}
+                  label={{
+                    value: "Score (%)",
+                    angle: -90,
+                    position: "insideLeft",
+                    fontSize: 12,
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "18px",
+                    border: "1px solid rgba(17, 33, 38, 0.08)",
+                    boxShadow: "0 20px 40px rgba(17, 33, 38, 0.10)",
+                  }}
+                  formatter={(value, name) => [
+                    `${Number(value).toFixed(1)}%`,
+                    formatModelName(String(name)),
+                  ]}
+                />
+                {modelKeys.map((modelKey, index) => (
+                  <Bar
+                    key={modelKey}
+                    dataKey={modelKey}
+                    name={formatModelName(modelKey)}
+                    radius={[8, 8, 0, 0]}
+                    fill={chartColors[index % chartColors.length]}
+                  >
+                    {comparisonData.map((entry) => (
+                      <Cell
+                        key={`${modelKey}-${String(entry.label)}`}
+                        fill={chartColors[index % chartColors.length]}
+                      />
+                    ))}
+                  </Bar>
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+
+        <Panel tone="muted">
+          <p className="eyebrow">Advanced detail</p>
+          <h2 className="mt-3 text-2xl font-semibold text-[var(--text-strong)]">
+            Original technical evaluation metrics
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--text-muted)]">
+            The table below preserves the saved benchmark data in its more
+            technical form for direct model comparison.
+          </p>
+
+          <div className="table-shell mt-8 overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th className="text-left">Model</th>
+                  <th className="text-center">Accuracy</th>
+                  <th className="text-center">Precision</th>
+                  <th className="text-center">Recall</th>
+                  <th className="text-center">F1 Score</th>
+                  <th className="text-center">AUC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {modelKeys.map((modelKey) => {
+                  const metrics = data.models[modelKey];
+                  const isBest = modelKey === bestModelKey;
+                  return (
+                    <tr
+                      key={modelKey}
+                      className={isBest ? "bg-[rgba(29,72,80,0.05)]" : undefined}
+                    >
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium">
+                            {formatModelName(modelKey)}
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-center py-4 font-semibold text-gray-800">
-                      {(metrics.accuracy * 100).toFixed(1)}%
-                    </td>
-                    <td className="text-center py-4 font-semibold text-gray-800">
-                      {(metrics.precision * 100).toFixed(1)}%
-                    </td>
-                    <td className="text-center py-4 font-semibold text-gray-800">
-                      {(metrics.recall * 100).toFixed(1)}%
-                    </td>
-                    <td className="text-center py-4 font-semibold text-gray-800">
-                      {(metrics.f1 * 100).toFixed(1)}%
-                    </td>
-                    <td className="text-center py-4 font-semibold text-gray-800">
-                      {metrics.auc.toFixed(3)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </details>
+                          {isBest ? (
+                            <span className="rounded-full border border-[rgba(29,72,80,0.16)] bg-[rgba(29,72,80,0.08)] px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-[var(--accent-strong)]">
+                              Best
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="text-center">
+                        {(metrics.accuracy * 100).toFixed(1)}%
+                      </td>
+                      <td className="text-center">
+                        {(metrics.precision * 100).toFixed(1)}%
+                      </td>
+                      <td className="text-center">
+                        {(metrics.recall * 100).toFixed(1)}%
+                      </td>
+                      <td className="text-center">
+                        {(metrics.f1 * 100).toFixed(1)}%
+                      </td>
+                      <td className="text-center">{metrics.auc.toFixed(3)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </SiteContainer>
     </div>
   );
 }
