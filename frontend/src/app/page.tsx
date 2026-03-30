@@ -10,6 +10,7 @@ import {
   FaSearch,
 } from "react-icons/fa";
 import { fetchModelInfo, type ModelInfo } from "@/lib/api";
+import { formatModelName } from "@/lib/prediction-utils";
 
 export default function Home() {
   const [info, setInfo] = useState<ModelInfo | null>(null);
@@ -114,7 +115,7 @@ export default function Home() {
             </div>
             <h3 className="text-lg font-bold text-gray-800 mb-2">Models</h3>
             <div className="space-y-1.5">
-              {(info?.models || ["XGBoost", "MLP"]).map((m, i) => (
+              {(info?.models || ["xgboost", "random_forest"]).map((m, i) => (
                 <p
                   key={m}
                   className="text-gray-500 text-sm flex items-center gap-2"
@@ -124,7 +125,7 @@ export default function Home() {
                       i === 0 ? "bg-blue-600" : "bg-blue-400"
                     }`}
                   />
-                  {m}
+                  {formatModelName(m)}
                 </p>
               ))}
             </div>
@@ -141,7 +142,7 @@ export default function Home() {
                 : "Loading..."}
             </p>
             <p className="text-blue-200 text-sm mt-1">
-              {info?.best_model || "XGBoost"} Model
+              {formatModelName(info?.best_model || "xgboost")} Model
             </p>
           </div>
         </div>
