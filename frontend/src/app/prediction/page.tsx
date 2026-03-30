@@ -1,37 +1,44 @@
 "use client";
+
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
 } from "recharts";
-import { FaCheckCircle, FaBolt, FaChartBar } from "react-icons/fa";
+import { FaChartBar, FaCheckCircle, FaBolt } from "react-icons/fa";
 import { usePrediction } from "@/context/PredictionContext";
-import { fetchPerformance, type PerformanceData } from "@/lib/api";
-import Link from "next/link";
+import { fetchMetrics, type MetricsData } from "@/lib/api";
+import {
+  buildShapChartData,
+  confidenceLabel,
+  formatModelName,
+  predictionLabel,
+  riskLabel,
+  riskToneClass,
+} from "@/lib/prediction-utils";
 
 export default function PredictionPage() {
-  const { lastPrediction } = usePrediction();
-  const [perf, setPerf] = useState<PerformanceData | null>(null);
+  const { explanation, features, model, prediction } = usePrediction();
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
 
   useEffect(() => {
-    fetchPerformance().then(setPerf).catch(console.error);
+    fetchMetrics().then(setMetrics).catch(console.error);
   }, []);
 
-  if (!lastPrediction) {
+  if (!prediction) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Prediction Result
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Prediction Result</h1>
           <p className="text-gray-500 mt-1">
-            Detailed analysis of the prediction output
+            Detailed analysis of the latest prediction.
           </p>
         </div>
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-blue-50 text-center">
@@ -42,7 +49,7 @@ export default function PredictionPage() {
             No Prediction Available
           </h3>
           <p className="text-gray-400 text-sm mb-6">
-            Go to the Upload page to make a prediction first.
+            Go to the upload page to make a prediction first.
           </p>
           <Link
             href="/upload"
@@ -55,66 +62,45 @@ export default function PredictionPage() {
     );
   }
 
-  const prediction = lastPrediction;
+  const shapEntries = buildShapChartData(explanation).slice(0, 15);
+  const inputFeatures = Object.entries(features || {}).slice(0, 10);
+  const selectedModel = model || metrics?.best_model || "xgboost";
+  const modelMetrics = metrics?.models?.[selectedModel];
   const percentage = Math.round(prediction.probability * 100);
-  const modelName = prediction.model;
-
-  // SHAP values for chart
-  const shapEntries = Object.entries(prediction.shap_values || {})
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-    .slice(0, 15);
-
-  // Top features used
-  const featuresUsed = Object.entries(prediction.features_used || {}).slice(
-    0,
-    10
-  );
-
-  // Model metrics from performance endpoint
-  const modelMetrics = perf?.models?.[modelName];
-
-  const riskColor =
-    prediction.risk_category === "High Risk"
-      ? "bg-red-50 text-red-600"
-      : prediction.risk_category === "Medium Risk"
-      ? "bg-yellow-50 text-yellow-600"
-      : "bg-green-50 text-green-600";
+  const risk = riskLabel(prediction.probability);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Prediction Result</h1>
         <p className="text-gray-500 mt-1">
-          Detailed analysis of the prediction output
+          Detailed analysis of the latest prediction.
         </p>
       </div>
 
-      {/* Main Prediction Card */}
       <div className="bg-white rounded-2xl p-8 shadow-sm border border-blue-50 mb-6">
         <div className="flex flex-col md:flex-row items-center gap-8">
           <div className="flex-1 text-center md:text-left">
             <div
-              className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-4 ${riskColor}`}
+              className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-4 ${riskToneClass(
+                risk
+              )}`}
             >
               <FaCheckCircle />
-              {prediction.risk_category}
+              {risk}
             </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              {prediction.prediction}
+              {predictionLabel(prediction.prediction)}
             </h2>
             <p className="text-gray-500">
-              {prediction.confidence} &middot; Model: {prediction.model}
+              {confidenceLabel(prediction.confidence)} &middot; Model:{" "}
+              {formatModelName(selectedModel)}
             </p>
           </div>
 
-          {/* Confidence Score */}
           <div className="flex-shrink-0">
             <div className="relative w-40 h-40">
-              <svg
-                viewBox="0 0 120 120"
-                className="w-full h-full -rotate-90"
-              >
+              <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
                 <circle
                   cx="60"
                   cy="60"
@@ -128,16 +114,14 @@ export default function PredictionPage() {
                   cy="60"
                   r="50"
                   fill="none"
-                  stroke="url(#gradient)"
+                  stroke="url(#predictionGradient)"
                   strokeWidth="10"
                   strokeLinecap="round"
-                  strokeDasharray={`${percentage * 3.14} ${
-                    (100 - percentage) * 3.14
-                  }`}
+                  strokeDasharray={`${percentage * 3.14} ${(100 - percentage) * 3.14}`}
                 />
                 <defs>
                   <linearGradient
-                    id="gradient"
+                    id="predictionGradient"
                     x1="0%"
                     y1="0%"
                     x2="100%"
@@ -158,57 +142,55 @@ export default function PredictionPage() {
           </div>
         </div>
 
-        {/* Probability Bar */}
         <div className="mt-8">
           <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-500">Probability Score</span>
-            <span className="font-semibold text-gray-800">{percentage}%</span>
+            <span className="text-gray-500">Confidence score</span>
+            <span className="font-semibold text-gray-800">
+              {(prediction.confidence * 100).toFixed(1)}%
+            </span>
           </div>
           <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000"
-              style={{ width: `${percentage}%` }}
+              style={{ width: `${prediction.confidence * 100}%` }}
             />
           </div>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
-        {/* Best Model Card */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
               <FaBolt className="text-blue-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-800">
-              Model Used
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-800">Model Used</h3>
           </div>
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 text-white">
-            <p className="text-2xl font-bold">{modelName}</p>
+            <p className="text-2xl font-bold">{formatModelName(selectedModel)}</p>
             <p className="text-blue-200 text-sm mt-1">
-              {modelName === "XGBoost"
-                ? "Gradient Boosting Classifier"
-                : "Multi-Layer Perceptron"}
+              {selectedModel === "xgboost"
+                ? "Boosted tree classifier"
+                : "Random forest classifier"}
             </p>
           </div>
           {modelMetrics && (
             <div className="mt-4 grid grid-cols-3 gap-3 text-center">
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-lg font-bold text-gray-800">
-                  {(modelMetrics.accuracy.mean * 100).toFixed(1)}%
+                  {(modelMetrics.accuracy * 100).toFixed(1)}%
                 </p>
                 <p className="text-xs text-gray-500">Accuracy</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-lg font-bold text-gray-800">
-                  {(modelMetrics.recall.mean * 100).toFixed(1)}%
+                  {(modelMetrics.recall * 100).toFixed(1)}%
                 </p>
                 <p className="text-xs text-gray-500">Recall</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-lg font-bold text-gray-800">
-                  {(modelMetrics.f1.mean * 100).toFixed(1)}%
+                  {(modelMetrics.f1 * 100).toFixed(1)}%
                 </p>
                 <p className="text-xs text-gray-500">F1 Score</p>
               </div>
@@ -216,7 +198,6 @@ export default function PredictionPage() {
           )}
         </div>
 
-        {/* Input Features Card */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -227,16 +208,14 @@ export default function PredictionPage() {
             </h3>
           </div>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {featuresUsed.map(([name, value]) => (
+            {inputFeatures.map(([name, value]) => (
               <div
                 key={name}
                 className="flex justify-between items-center bg-gray-50 rounded-lg px-4 py-2.5"
               >
-                <span className="text-xs font-medium text-gray-600">
-                  {name}
-                </span>
+                <span className="text-xs font-medium text-gray-600">{name}</span>
                 <span className="text-xs font-bold text-gray-800 bg-white px-2 py-0.5 rounded">
-                  {typeof value === "number" ? value.toFixed(4) : value}
+                  {value.toFixed(4)}
                 </span>
               </div>
             ))}
@@ -244,7 +223,6 @@ export default function PredictionPage() {
         </div>
       </div>
 
-      {/* SHAP Values for this prediction */}
       {shapEntries.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
           <div className="flex items-center gap-3 mb-6">
@@ -256,8 +234,8 @@ export default function PredictionPage() {
                 SHAP Explanation for This Prediction
               </h3>
               <p className="text-sm text-gray-500">
-                How each feature pushed the prediction toward Parkinson&apos;s
-                (red) or Healthy (blue)
+                Positive values increase Parkinson&apos;s risk; negative values
+                decrease it.
               </p>
             </div>
           </div>
@@ -281,16 +259,21 @@ export default function PredictionPage() {
                     borderRadius: "12px",
                     border: "1px solid #e2e8f0",
                   }}
-                  formatter={(v: number) => [
-                    `${v > 0 ? "+" : ""}${v.toFixed(4)}`,
-                    "SHAP",
-                  ]}
+                  formatter={(value) => {
+                    const numericValue = Number(
+                      Array.isArray(value) ? value[0] : value ?? 0
+                    );
+                    return [
+                      `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(4)}`,
+                      "SHAP",
+                    ];
+                  }}
                 />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
-                  {shapEntries.map((entry, i) => (
+                  {shapEntries.map((entry) => (
                     <Cell
-                      key={i}
-                      fill={entry.value >= 0 ? "#ef4444" : "#3b82f6"}
+                      key={entry.name}
+                      fill={entry.value >= 0 ? "#ef4444" : "#16a34a"}
                     />
                   ))}
                 </Bar>
