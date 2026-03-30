@@ -1,114 +1,224 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaUpload, FaFlask, FaPlay } from "react-icons/fa";
+import { FaFlask, FaPlay, FaUpload } from "react-icons/fa";
 import ProbabilityGauge from "@/components/charts/ProbabilityGauge";
-import {
-  fetchFeatures,
-  predict,
-  predictCSV,
-  type PredictionResult,
-  type CSVPredictionResult,
-  type FeaturesData,
-} from "@/lib/api";
 import { usePrediction } from "@/context/PredictionContext";
+import { parseCsvFeatureRow } from "@/lib/csv";
+import { explain, fetchFeatures, predict, type FeaturesData } from "@/lib/api";
+import {
+  confidenceLabel,
+  formatModelName,
+  predictionLabel,
+  riskLabel,
+  riskToneClass,
+} from "@/lib/prediction-utils";
+
+function buildNumericFeatures(
+  rawValues: Record<string, string>,
+  expectedFeatures: string[]
+): Record<string, number> {
+  const numericFeatures: Record<string, number> = {};
+
+  for (const feature of expectedFeatures) {
+    const rawValue = rawValues[feature]?.trim() ?? "";
+    const parsed = rawValue === "" ? 0 : Number.parseFloat(rawValue);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`Feature \`${feature}\` must be numeric.`);
+    }
+    numericFeatures[feature] = parsed;
+  }
+
+  return numericFeatures;
+}
 
 export default function UploadPage() {
   const router = useRouter();
-  const { setLastPrediction } = usePrediction();
+  const { prediction, model, setPredictionBundle } = usePrediction();
 
   const [featuresInfo, setFeaturesInfo] = useState<FeaturesData | null>(null);
-  const [featureValues, setFeatureValues] = useState<Record<string, string>>(
-    {}
-  );
-  const [selectedModel, setSelectedModel] = useState("XGBoost");
-  const [prediction, setPrediction] = useState<PredictionResult | null>(null);
-  const [csvResult, setCsvResult] = useState<CSVPredictionResult | null>(null);
+  const [featureValues, setFeatureValues] = useState<Record<string, string>>({});
+  const [selectedModel, setSelectedModel] = useState("xgboost");
   const [fileName, setFileName] = useState("");
+  const [csvNotice, setCsvNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Fetch feature names on mount
   useEffect(() => {
+    let cancelled = false;
+
     fetchFeatures()
       .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
         setFeaturesInfo(data);
-        const init: Record<string, string> = {};
-        data.selected_features.forEach((f) => (init[f] = ""));
-        setFeatureValues(init);
+        setSelectedModel(data.supported_models[0] || "xgboost");
+
+        const nextValues: Record<string, string> = {};
+        data.expected_features.forEach((feature) => {
+          nextValues[feature] =
+            data.sample_data[feature] !== undefined
+              ? String(data.sample_data[feature])
+              : "";
+        });
+        setFeatureValues(nextValues);
       })
-      .catch((e) => setError(e.message));
+      .catch((fetchError) => {
+        if (!cancelled) {
+          setError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Failed to load feature metadata."
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFeatureValues({ ...featureValues, [e.target.name]: e.target.value });
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFeatureValues((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
   };
 
   const handleLoadSample = () => {
-    if (!featuresInfo?.sample_data) return;
-    const sample: Record<string, string> = {};
-    for (const [key, val] of Object.entries(featuresInfo.sample_data)) {
-      sample[key] = String(val);
+    if (!featuresInfo?.sample_data) {
+      return;
     }
-    setFeatureValues(sample);
+
+    const sampleValues: Record<string, string> = {};
+    featuresInfo.expected_features.forEach((feature) => {
+      sampleValues[feature] =
+        featuresInfo.sample_data[feature] !== undefined
+          ? String(featuresInfo.sample_data[feature])
+          : "";
+    });
+    setFeatureValues(sampleValues);
+    setCsvNotice("");
+    setError("");
+  };
+
+  const runAnalysis = async (
+    features: Record<string, number>,
+    uploadedFileName: string | null = null
+  ) => {
+    setLoading(true);
+    setError("");
+    setPredictionBundle(null);
+
+    try {
+      const [predictionResult, explanationResult] = await Promise.all([
+        predict(features, selectedModel),
+        explain(features, selectedModel),
+      ]);
+
+      setPredictionBundle({
+        prediction: predictionResult,
+        explanation: explanationResult,
+        features,
+        model: selectedModel,
+        uploadedFileName,
+      });
+    } catch (analysisError) {
+      setError(
+        analysisError instanceof Error
+          ? analysisError.message
+          : "Prediction failed."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePredict = async () => {
-    setLoading(true);
-    setError("");
-    setCsvResult(null);
+    if (!featuresInfo) {
+      return;
+    }
+
+    setCsvNotice("");
+
     try {
-      const numericFeatures: Record<string, number> = {};
-      for (const [key, val] of Object.entries(featureValues)) {
-        numericFeatures[key] = val ? parseFloat(val) : 0;
-      }
-      const result = await predict(numericFeatures, selectedModel);
-      setPrediction(result);
-      setLastPrediction(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Prediction failed");
-    } finally {
-      setLoading(false);
+      const numericFeatures = buildNumericFeatures(
+        featureValues,
+        featuresInfo.expected_features
+      );
+      await runAnalysis(numericFeatures, null);
+    } catch (validationError) {
+      setError(
+        validationError instanceof Error
+          ? validationError.message
+          : "Invalid feature values."
+      );
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !featuresInfo) {
+      return;
+    }
+
     setFileName(file.name);
-    setLoading(true);
     setError("");
-    setPrediction(null);
+
     try {
-      const result = await predictCSV(file);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setCsvResult(result);
+      const csvText = await file.text();
+      const { features, rowCount, ignoredColumns } = parseCsvFeatureRow(
+        csvText,
+        featuresInfo.expected_features
+      );
+
+      const nextValues: Record<string, string> = {};
+      featuresInfo.expected_features.forEach((feature) => {
+        nextValues[feature] = String(features[feature]);
+      });
+      setFeatureValues(nextValues);
+
+      const noticeParts = [`Loaded ${file.name}.`];
+      if (ignoredColumns.length > 0) {
+        noticeParts.push(
+          `Ignored ${ignoredColumns.length} extra column${
+            ignoredColumns.length === 1 ? "" : "s"
+          } that are not required by the deployed model.`
+        );
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "CSV prediction failed");
+      if (rowCount > 1) {
+        noticeParts.push(
+          "Using the first row for prediction and explainability."
+        );
+      }
+      setCsvNotice(noticeParts.join(" "));
+
+      await runAnalysis(features, file.name);
+    } catch (csvError) {
+      setError(
+        csvError instanceof Error ? csvError.message : "CSV parsing failed."
+      );
     } finally {
-      setLoading(false);
+      event.target.value = "";
     }
   };
 
-  const handleViewDetails = () => {
-    router.push("/prediction");
-  };
-
-  const riskColor = (risk: string) => {
-    if (risk === "High Risk") return "bg-red-50 text-red-600";
-    if (risk === "Medium Risk") return "bg-yellow-50 text-yellow-600";
-    return "bg-green-50 text-green-600";
-  };
+  const displayedPrediction = prediction;
+  const displayedRisk = displayedPrediction
+    ? riskLabel(displayedPrediction.probability)
+    : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Upload Data</h1>
         <p className="text-gray-500 mt-1">
-          Upload a CSV file or enter speech features manually
+          Upload a single-row CSV or enter the expected voice features manually.
         </p>
       </div>
 
@@ -118,23 +228,28 @@ export default function UploadPage() {
         </div>
       )}
 
+      {csvNotice && (
+        <div className="mb-6 bg-blue-50 text-blue-700 rounded-xl p-4 text-sm">
+          {csvNotice}
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-8">
-        {/* Left Panel - Input */}
         <div className="space-y-6">
-          {/* CSV Upload */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <FaUpload className="text-blue-500" />
               Upload CSV
             </h2>
             <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-blue-200 rounded-xl cursor-pointer bg-blue-50/50 hover:bg-blue-50 transition-colors">
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center text-center px-4">
                 <FaUpload className="text-blue-400 text-2xl mb-2" />
                 <p className="text-sm text-gray-500">
-                  {fileName || "Click to upload or drag & drop"}
+                  {fileName || "Click to upload a CSV"}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  CSV with speech features (max 1000 rows)
+                  Extra dataset columns are allowed, but the required voice
+                  features must be present.
                 </p>
               </div>
               <input
@@ -146,7 +261,6 @@ export default function UploadPage() {
             </label>
           </div>
 
-          {/* Manual Input */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -161,32 +275,35 @@ export default function UploadPage() {
               </button>
             </div>
 
-            {/* Model Selector */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-600 mb-1">
                 Model
               </label>
               <select
                 value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
+                onChange={(event) => setSelectedModel(event.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-gray-50"
               >
-                <option value="XGBoost">XGBoost (Recommended)</option>
-                <option value="MLP">MLP (Neural Network)</option>
+                {(featuresInfo?.supported_models || ["xgboost"]).map(
+                  (supportedModel) => (
+                    <option key={supportedModel} value={supportedModel}>
+                      {formatModelName(supportedModel)}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
-            {/* Feature Inputs - scrollable grid */}
             <div className="max-h-80 overflow-y-auto pr-2 space-y-3">
-              {featuresInfo?.selected_features.map((key) => (
-                <div key={key}>
+              {featuresInfo?.expected_features.map((feature) => (
+                <div key={feature}>
                   <label className="block text-xs font-medium text-gray-500 mb-1">
-                    {key}
+                    {feature}
                   </label>
                   <input
                     type="number"
-                    name={key}
-                    value={featureValues[key] || ""}
+                    name={feature}
+                    value={featureValues[feature] || ""}
                     onChange={handleInputChange}
                     placeholder="0.0"
                     step="any"
@@ -235,129 +352,61 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {/* Right Panel - Results */}
         <div>
-          {/* Single Prediction Result */}
-          {prediction && (
+          {displayedPrediction && displayedRisk && (
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-blue-50 mb-6">
               <div className="text-center w-full">
                 <div
-                  className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-6 ${riskColor(
-                    prediction.risk_category
+                  className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-6 ${riskToneClass(
+                    displayedRisk
                   )}`}
                 >
-                  {prediction.risk_category}
+                  {displayedRisk}
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-1">
-                  {prediction.prediction}
+                  {predictionLabel(displayedPrediction.prediction)}
                 </h3>
                 <p className="text-gray-400 text-sm mb-2">
-                  {prediction.confidence} &middot; {prediction.model}
+                  {confidenceLabel(displayedPrediction.confidence)} &middot;{" "}
+                  {formatModelName(model || selectedModel)}
                 </p>
 
-                <ProbabilityGauge probability={prediction.probability} />
+                <ProbabilityGauge probability={displayedPrediction.probability} />
 
                 <div className="mt-6 space-y-2">
                   <div className="flex justify-between text-sm bg-gray-50 rounded-lg px-4 py-2">
                     <span className="text-gray-500">Probability</span>
                     <span className="font-semibold text-gray-800">
-                      {(prediction.probability * 100).toFixed(1)}%
+                      {(displayedPrediction.probability * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="flex justify-between text-sm bg-gray-50 rounded-lg px-4 py-2">
-                    <span className="text-gray-500">Risk Level</span>
+                    <span className="text-gray-500">Confidence</span>
                     <span className="font-semibold text-gray-800">
-                      {prediction.risk_category}
+                      {(displayedPrediction.confidence * 100).toFixed(1)}%
                     </span>
                   </div>
                 </div>
 
-                <button
-                  onClick={handleViewDetails}
-                  className="mt-4 text-blue-600 text-sm font-medium hover:underline"
-                >
-                  View detailed analysis &rarr;
-                </button>
+                <div className="flex items-center justify-center gap-4 mt-5 text-sm">
+                  <button
+                    onClick={() => router.push("/prediction")}
+                    className="text-blue-600 font-medium hover:underline"
+                  >
+                    View prediction details
+                  </button>
+                  <button
+                    onClick={() => router.push("/explainability")}
+                    className="text-blue-600 font-medium hover:underline"
+                  >
+                    View SHAP explanation
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* CSV Batch Result */}
-          {csvResult && (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 mb-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                Batch Prediction Results
-              </h3>
-
-              <div className="grid grid-cols-3 gap-3 mb-6">
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-gray-800">
-                    {csvResult.summary.total}
-                  </p>
-                  <p className="text-xs text-gray-500">Total</p>
-                </div>
-                <div className="bg-red-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-red-600">
-                    {csvResult.summary.parkinsons}
-                  </p>
-                  <p className="text-xs text-gray-500">Parkinson&apos;s</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-green-600">
-                    {csvResult.summary.healthy}
-                  </p>
-                  <p className="text-xs text-gray-500">Healthy</p>
-                </div>
-              </div>
-
-              <div className="max-h-60 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left pb-2 text-gray-500">#</th>
-                      <th className="text-left pb-2 text-gray-500">
-                        Prediction
-                      </th>
-                      <th className="text-center pb-2 text-gray-500">Prob</th>
-                      <th className="text-right pb-2 text-gray-500">Risk</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvResult.predictions.slice(0, 50).map((row) => (
-                      <tr key={row.index} className="border-b border-gray-50">
-                        <td className="py-2 text-gray-400">{row.index + 1}</td>
-                        <td className="py-2 font-medium text-gray-700">
-                          {row.prediction === "Parkinson's Disease"
-                            ? "PD"
-                            : "Healthy"}
-                        </td>
-                        <td className="py-2 text-center text-gray-600">
-                          {(row.probability * 100).toFixed(1)}%
-                        </td>
-                        <td className="py-2 text-right">
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full ${riskColor(
-                              row.risk_category
-                            )}`}
-                          >
-                            {row.risk_category}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {csvResult.predictions.length > 50 && (
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    Showing first 50 of {csvResult.predictions.length} results
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Empty State */}
-          {!prediction && !csvResult && (
+          {!displayedPrediction && (
             <div className="bg-white rounded-2xl p-8 shadow-sm border border-blue-50 min-h-[400px] flex flex-col items-center justify-center">
               <div className="text-center">
                 <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -367,7 +416,7 @@ export default function UploadPage() {
                   No Prediction Yet
                 </h3>
                 <p className="text-gray-400 text-sm mt-1">
-                  Upload data or enter features to get a prediction
+                  Upload a CSV or enter the expected features to analyze one sample.
                 </p>
               </div>
             </div>
@@ -375,10 +424,9 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {/* Disclaimer */}
       <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-700">
         These scores represent Parkinson&apos;s disease likelihood based on
-        speech features and should NOT be interpreted as medical diagnosis.
+        speech features and should not be treated as a medical diagnosis.
       </div>
     </div>
   );
