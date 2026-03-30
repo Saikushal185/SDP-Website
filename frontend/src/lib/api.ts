@@ -1,132 +1,111 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
-// ─── Types ──────────────────────────────────────────────────────────────────
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+).replace(/\/$/, "");
 
 export interface PredictionResult {
-  prediction: string;
+  prediction: number;
   probability: number;
-  risk_category: string;
-  confidence: string;
-  model: string;
-  shap_values: Record<string, number>;
-  features_used: Record<string, number>;
+  confidence: number;
 }
 
-export interface CSVPredictionRow {
-  index: number;
-  prediction: string;
-  probability: number;
-  risk_category: string;
-}
-
-export interface CSVPredictionResult {
-  predictions: CSVPredictionRow[];
-  summary: {
-    total: number;
-    parkinsons: number;
-    healthy: number;
-    mean_probability: number;
-    risk_distribution: Record<string, number>;
-  };
-  error?: string;
-}
-
-export interface MetricDetail {
-  mean: number;
-  std: number;
-  per_fold: number[];
+export interface ExplanationResult {
+  shap_values: number[];
+  feature_names: string[];
+  base_value: number;
+  prediction: number;
 }
 
 export interface ModelMetrics {
-  accuracy: MetricDetail;
-  precision: MetricDetail;
-  recall: MetricDetail;
-  f1: MetricDetail;
-  roc_auc: MetricDetail;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  auc: number;
 }
 
-export interface PerformanceData {
+export interface MetricsData {
   models: Record<string, ModelMetrics>;
   best_model: string;
-  roc_data: Record<string, { fpr: number[]; tpr: number[] }>;
-}
-
-export interface FeatureImportanceItem {
-  name: string;
-  importance: number;
-}
-
-export interface ShapValueItem {
-  name: string;
-  mean_abs_shap: number;
-}
-
-export interface ExplainabilityData {
-  feature_importance: FeatureImportanceItem[];
-  global_shap_values: ShapValueItem[];
-  selected_features: string[];
+  roc_data?: Record<string, { fpr: number[]; tpr: number[] }>;
+  generated_at?: string;
 }
 
 export interface FeaturesData {
-  selected_features: string[];
-  all_features: string[];
-  n_selected: number;
+  expected_features: string[];
+  feature_count: number;
   sample_data: Record<string, number>;
+  supported_models: string[];
 }
 
 export interface ModelInfo {
   dataset_size: number;
-  n_total_features: number;
   n_selected_features: number;
   models: string[];
   best_model: string;
   best_accuracy: number;
-  feature_selection_method: string;
 }
 
-// ─── API Functions ──────────────────────────────────────────────────────────
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  let response: Response;
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, options);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `API error: ${res.status}`);
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch {
+    throw new Error(
+      `Unable to reach the backend API at ${API_BASE}. Check NEXT_PUBLIC_API_URL.`
+    );
   }
-  return res.json();
+
+  if (!response.ok) {
+    const errorPayload = await response
+      .json()
+      .catch(() => ({ error: response.statusText }));
+    throw new Error(errorPayload.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export function fetchFeatures(): Promise<FeaturesData> {
-  return apiFetch("/api/features");
+  return apiFetch("/features");
 }
 
 export function predict(
   features: Record<string, number>,
-  model: string = "XGBoost"
+  model: string = "xgboost"
 ): Promise<PredictionResult> {
-  return apiFetch("/api/predict", {
+  return apiFetch("/predict", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ features, model }),
   });
 }
 
-export async function predictCSV(file: File): Promise<CSVPredictionResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  return apiFetch("/api/predict-csv", {
+export function explain(
+  features: Record<string, number>,
+  model: string = "xgboost"
+): Promise<ExplanationResult> {
+  return apiFetch("/explain", {
     method: "POST",
-    body: formData,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ features, model }),
   });
 }
 
-export function fetchPerformance(): Promise<PerformanceData> {
-  return apiFetch("/api/performance");
+export function fetchMetrics(): Promise<MetricsData> {
+  return apiFetch("/metrics");
 }
 
-export function fetchExplainability(): Promise<ExplainabilityData> {
-  return apiFetch("/api/explainability");
+export function fetchPerformance(): Promise<MetricsData> {
+  return fetchMetrics();
 }
 
 export function fetchModelInfo(): Promise<ModelInfo> {
-  return apiFetch("/api/model-info");
+  return apiFetch("/model-info");
 }
