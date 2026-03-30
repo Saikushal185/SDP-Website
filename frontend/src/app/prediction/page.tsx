@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Bar,
   BarChart,
@@ -12,7 +11,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { FaChartBar, FaCheckCircle, FaBolt } from "react-icons/fa";
+import { FaChartBar, FaCheckCircle, FaWaveSquare } from "react-icons/fa";
+import {
+  EmptyState,
+  LinkButton,
+  PageIntro,
+  Panel,
+  SiteContainer,
+  StatusPill,
+} from "@/components/site/ui";
 import { usePrediction } from "@/context/PredictionContext";
 import { fetchMetrics, type MetricsData } from "@/lib/api";
 import {
@@ -21,7 +28,7 @@ import {
   formatModelName,
   predictionLabel,
   riskLabel,
-  riskToneClass,
+  riskTone,
 } from "@/lib/prediction-utils";
 
 export default function PredictionPage() {
@@ -34,30 +41,20 @@ export default function PredictionPage() {
 
   if (!prediction) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Prediction Result</h1>
-          <p className="text-gray-500 mt-1">
-            Detailed analysis of the latest prediction.
-          </p>
-        </div>
-        <div className="bg-white rounded-2xl p-12 shadow-sm border border-blue-50 text-center">
-          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FaChartBar className="text-blue-300 text-3xl" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-400 mb-2">
-            No Prediction Available
-          </h3>
-          <p className="text-gray-400 text-sm mb-6">
-            Go to the upload page to make a prediction first.
-          </p>
-          <Link
-            href="/upload"
-            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all"
-          >
-            Go to Upload
-          </Link>
-        </div>
+      <div className="pb-20">
+        <PageIntro
+          eyebrow="Prediction review"
+          title="Prediction detail becomes available after running the analysis."
+          description="This route is designed for the second step of the demo: reviewing the model decision, its confidence, and the highest-impact SHAP signals."
+        />
+        <SiteContainer className="pt-10">
+          <EmptyState
+            icon={<FaChartBar />}
+            title="No prediction available"
+            description="Go to the upload route to create a live result first, then return here for the detailed summary."
+            action={<LinkButton href="/upload">Go to upload</LinkButton>}
+          />
+        </SiteContainer>
       </div>
     );
   }
@@ -70,218 +67,227 @@ export default function PredictionPage() {
   const risk = riskLabel(prediction.probability);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Prediction Result</h1>
-        <p className="text-gray-500 mt-1">
-          Detailed analysis of the latest prediction.
-        </p>
-      </div>
+    <div className="pb-20">
+      <PageIntro
+        eyebrow="Prediction review"
+        title="A clearer summary of the latest model result."
+        description="This view foregrounds the decision, confidence, and active model before moving into the supporting metrics and SHAP contributions."
+        meta={[
+          { label: "Risk band", value: risk },
+          { label: "Model", value: formatModelName(selectedModel) },
+          {
+            label: "Confidence",
+            value: `${(prediction.confidence * 100).toFixed(1)}%`,
+          },
+        ]}
+      />
 
-      <div className="bg-white rounded-2xl p-8 shadow-sm border border-blue-50 mb-6">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          <div className="flex-1 text-center md:text-left">
-            <div
-              className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-4 ${riskToneClass(
-                risk
-              )}`}
-            >
-              <FaCheckCircle />
-              {risk}
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              {predictionLabel(prediction.prediction)}
-            </h2>
-            <p className="text-gray-500">
-              {confidenceLabel(prediction.confidence)} &middot; Model:{" "}
-              {formatModelName(selectedModel)}
-            </p>
-          </div>
-
-          <div className="flex-shrink-0">
-            <div className="relative w-40 h-40">
-              <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="50"
-                  fill="none"
-                  stroke="#e2e8f0"
-                  strokeWidth="10"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="50"
-                  fill="none"
-                  stroke="url(#predictionGradient)"
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeDasharray={`${percentage * 3.14} ${(100 - percentage) * 3.14}`}
-                />
-                <defs>
-                  <linearGradient
-                    id="predictionGradient"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="0%"
-                  >
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="100%" stopColor="#1d4ed8" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-gray-800">
-                  {percentage}%
-                </span>
-                <span className="text-xs text-gray-500">Probability</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-500">Confidence score</span>
-            <span className="font-semibold text-gray-800">
-              {(prediction.confidence * 100).toFixed(1)}%
-            </span>
-          </div>
-          <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000"
-              style={{ width: `${prediction.confidence * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <FaBolt className="text-blue-500" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800">Model Used</h3>
-          </div>
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-4 text-white">
-            <p className="text-2xl font-bold">{formatModelName(selectedModel)}</p>
-            <p className="text-blue-200 text-sm mt-1">
-              {selectedModel === "xgboost"
-                ? "Boosted tree classifier"
-                : "Random forest classifier"}
-            </p>
-          </div>
-          {modelMetrics && (
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-lg font-bold text-gray-800">
-                  {(modelMetrics.accuracy * 100).toFixed(1)}%
-                </p>
-                <p className="text-xs text-gray-500">Accuracy</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-lg font-bold text-gray-800">
-                  {(modelMetrics.recall * 100).toFixed(1)}%
-                </p>
-                <p className="text-xs text-gray-500">Recall</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-lg font-bold text-gray-800">
-                  {(modelMetrics.f1 * 100).toFixed(1)}%
-                </p>
-                <p className="text-xs text-gray-500">F1 Score</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <FaChartBar className="text-blue-500" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800">
-              Input Features (Top 10)
-            </h3>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {inputFeatures.map(([name, value]) => (
-              <div
-                key={name}
-                className="flex justify-between items-center bg-gray-50 rounded-lg px-4 py-2.5"
-              >
-                <span className="text-xs font-medium text-gray-600">{name}</span>
-                <span className="text-xs font-bold text-gray-800 bg-white px-2 py-0.5 rounded">
-                  {value.toFixed(4)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {shapEntries.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <FaChartBar className="text-blue-500" />
-            </div>
+      <SiteContainer className="space-y-6 pt-10">
+        <Panel tone="strong" className="overflow-hidden">
+          <div className="grid gap-8 lg:grid-cols-[1fr_280px] lg:items-center">
             <div>
-              <h3 className="text-lg font-semibold text-gray-800">
-                SHAP Explanation for This Prediction
-              </h3>
-              <p className="text-sm text-gray-500">
-                Positive values increase Parkinson&apos;s risk; negative values
-                decrease it.
+              <StatusPill tone={riskTone(risk)}>
+                <FaCheckCircle className="text-xs" />
+                {risk}
+              </StatusPill>
+              <h2 className="mt-6 font-display text-5xl text-[#f8f5ef]">
+                {predictionLabel(prediction.prediction)}
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-[rgba(248,245,239,0.74)]">
+                {confidenceLabel(prediction.confidence)} with{" "}
+                {formatModelName(selectedModel)} as the active model for this
+                review session.
               </p>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-[24px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-5">
+                  <p className="text-[0.72rem] uppercase tracking-[0.18em] text-[rgba(248,245,239,0.44)]">
+                    Probability
+                  </p>
+                  <p className="mt-3 font-display text-4xl text-[#f8f5ef]">
+                    {percentage}%
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-5">
+                  <p className="text-[0.72rem] uppercase tracking-[0.18em] text-[rgba(248,245,239,0.44)]">
+                    Confidence
+                  </p>
+                  <p className="mt-3 font-display text-4xl text-[#f8f5ef]">
+                    {(prediction.confidence * 100).toFixed(1)}%
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-5">
+                  <p className="text-[0.72rem] uppercase tracking-[0.18em] text-[rgba(248,245,239,0.44)]">
+                    Model
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-[#f8f5ef]">
+                    {formatModelName(selectedModel)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-6 text-center">
+              <p className="text-[0.72rem] uppercase tracking-[0.2em] text-[rgba(248,245,239,0.44)]">
+                Confidence score
+              </p>
+              <p className="mt-4 font-display text-6xl text-[#f8f5ef]">
+                {(prediction.confidence * 100).toFixed(0)}
+              </p>
+              <p className="mt-2 text-sm text-[rgba(248,245,239,0.66)]">
+                calibrated review confidence
+              </p>
+              <div className="mt-8 h-3 rounded-full bg-[rgba(248,245,239,0.12)]">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(248,245,239,0.62),#f8f5ef)]"
+                  style={{ width: `${prediction.confidence * 100}%` }}
+                />
+              </div>
             </div>
           </div>
-          <div style={{ height: shapEntries.length * 32 + 40 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={shapEntries}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 140, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fontSize: 10, fontWeight: 600 }}
-                  width={130}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "12px",
-                    border: "1px solid #e2e8f0",
-                  }}
-                  formatter={(value) => {
-                    const numericValue = Number(
-                      Array.isArray(value) ? value[0] : value ?? 0
-                    );
-                    return [
-                      `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(4)}`,
-                      "SHAP",
-                    ];
-                  }}
-                />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
-                  {shapEntries.map((entry) => (
-                    <Cell
-                      key={entry.name}
-                      fill={entry.value >= 0 ? "#ef4444" : "#16a34a"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        </Panel>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+                <FaWaveSquare />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--text-strong)]">
+                  Active model context
+                </h2>
+                <p className="text-sm leading-7 text-[var(--text-muted)]">
+                  The chosen model remains visible alongside its saved benchmark
+                  metrics.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-8 space-y-3">
+              <div className="data-row">
+                <span className="text-sm text-[var(--text-muted)]">Model</span>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  {formatModelName(selectedModel)}
+                </span>
+              </div>
+              <div className="data-row">
+                <span className="text-sm text-[var(--text-muted)]">Accuracy</span>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  {modelMetrics
+                    ? `${(modelMetrics.accuracy * 100).toFixed(1)}%`
+                    : "Loading"}
+                </span>
+              </div>
+              <div className="data-row">
+                <span className="text-sm text-[var(--text-muted)]">Recall</span>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  {modelMetrics
+                    ? `${(modelMetrics.recall * 100).toFixed(1)}%`
+                    : "Loading"}
+                </span>
+              </div>
+              <div className="data-row">
+                <span className="text-sm text-[var(--text-muted)]">F1 score</span>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  {modelMetrics ? `${(modelMetrics.f1 * 100).toFixed(1)}%` : "Loading"}
+                </span>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel tone="muted">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+                <FaChartBar />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--text-strong)]">
+                  Input features in view
+                </h2>
+                <p className="text-sm leading-7 text-[var(--text-muted)]">
+                  A quick reference of the most visible feature values used for
+                  this run.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-8 space-y-3">
+              {inputFeatures.map(([name, value]) => (
+                <div key={name} className="data-row">
+                  <span className="text-sm text-[var(--text-muted)]">{name}</span>
+                  <span className="rounded-full border border-[var(--border-subtle)] bg-white/80 px-3 py-1 text-sm font-semibold text-[var(--text-strong)]">
+                    {value.toFixed(4)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Panel>
         </div>
-      )}
+
+        {shapEntries.length > 0 ? (
+          <Panel>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow">Supportive evidence</p>
+                <h2 className="mt-3 text-2xl font-semibold text-[var(--text-strong)]">
+                  Highest-impact SHAP contributions
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-muted)]">
+                  Positive values increased the Parkinson&apos;s score. Negative
+                  values reduced it.
+                </p>
+              </div>
+              <LinkButton href="/explainability" variant="secondary">
+                Open explainability view
+              </LinkButton>
+            </div>
+
+            <div className="mt-8" style={{ height: shapEntries.length * 32 + 40 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={shapEntries}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 140, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(17,33,38,0.08)" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 10, fontWeight: 600 }}
+                    width={130}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "18px",
+                      border: "1px solid rgba(17, 33, 38, 0.08)",
+                      boxShadow: "0 20px 40px rgba(17, 33, 38, 0.10)",
+                    }}
+                    formatter={(value) => {
+                      const numericValue = Number(
+                        Array.isArray(value) ? value[0] : value ?? 0
+                      );
+                      return [
+                        `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(4)}`,
+                        "SHAP",
+                      ];
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={20}>
+                    {shapEntries.map((entry) => (
+                      <Cell
+                        key={entry.name}
+                        fill={entry.value >= 0 ? "#8e4b43" : "#2f6a55"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+        ) : null}
+      </SiteContainer>
     </div>
   );
 }
