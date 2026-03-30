@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   Bar,
   BarChart,
@@ -12,6 +11,14 @@ import {
   YAxis,
 } from "recharts";
 import { FaChartBar, FaLightbulb } from "react-icons/fa";
+import {
+  EmptyState,
+  LinkButton,
+  PageIntro,
+  Panel,
+  SiteContainer,
+  StatusPill,
+} from "@/components/site/ui";
 import { usePrediction } from "@/context/PredictionContext";
 import {
   buildAdvancedFeatureRows,
@@ -22,7 +29,7 @@ import {
   formatShapDirection,
   predictionLabel,
   riskLabel,
-  riskToneClass,
+  riskTone,
 } from "@/lib/prediction-utils";
 
 export default function ExplainabilityPage() {
@@ -30,248 +37,245 @@ export default function ExplainabilityPage() {
 
   if (!prediction || !explanation) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-10">
-        <div className="bg-white rounded-2xl p-12 shadow-sm border border-blue-50 text-center">
-          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FaLightbulb className="text-blue-300 text-3xl" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-400 mb-2">
-            No explanation available yet
-          </h3>
-          <p className="text-gray-400 text-sm mb-6">
-            Run a prediction first so the app can show which types of voice
-            patterns influenced the latest result.
-          </p>
-          <Link
-            href="/upload"
-            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all"
-          >
-            Go to Upload
-          </Link>
-        </div>
+      <div className="pb-20">
+        <PageIntro
+          eyebrow="Explainability"
+          title="Interpretation is available once a prediction has been generated."
+          description="This route is meant to explain the latest output in plain language first, then expose the raw feature-level SHAP details for technical review."
+        />
+        <SiteContainer className="pt-10">
+          <EmptyState
+            icon={<FaLightbulb />}
+            title="No explanation available yet"
+            description="Run the analysis from the upload route first so the app can show which groups of voice signals influenced the result."
+            action={<LinkButton href="/upload">Go to upload</LinkButton>}
+          />
+        </SiteContainer>
       </div>
     );
   }
 
   const groupedDrivers = buildGroupedShapData(explanation);
   const advancedRows = buildAdvancedFeatureRows(explanation, features);
-  const strongestIncreases = groupedDrivers.filter((item) => item.value > 0).slice(0, 3);
-  const strongestDecreases = groupedDrivers.filter((item) => item.value < 0).slice(0, 3);
+  const strongestIncreases = groupedDrivers
+    .filter((item) => item.value > 0)
+    .slice(0, 3);
+  const strongestDecreases = groupedDrivers
+    .filter((item) => item.value < 0)
+    .slice(0, 3);
   const risk = riskLabel(prediction.probability);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Explainability</h1>
-        <p className="text-gray-500 mt-1">
-          A plain-language view of what influenced the latest model result.
-        </p>
-      </div>
+    <div className="pb-20">
+      <PageIntro
+        eyebrow="Explainability"
+        title="A plain-language interpretation layer for the latest result."
+        description="The goal of this screen is to make the model legible: first through grouped signal families, then through raw feature-level contribution details."
+        meta={[
+          { label: "Risk band", value: risk },
+          { label: "Model", value: formatModelName(model || "xgboost") },
+          {
+            label: "Confidence",
+            value: `${(prediction.confidence * 100).toFixed(1)}%`,
+          },
+        ]}
+      />
 
-      <div className="grid lg:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50 lg:col-span-2">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-              <FaChartBar className="text-blue-500" />
+      <SiteContainer className="space-y-6 pt-10">
+        <div className="grid gap-6 lg:grid-cols-[1.18fr_0.82fr]">
+          <Panel>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+                <FaChartBar />
+              </div>
+              <div>
+                <p className="eyebrow">Grouped explanation</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-strong)]">
+                  What most influenced the score
+                </h2>
+                <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
+                  Red bars pushed the model toward a Parkinson&apos;s-positive
+                  outcome. Green bars softened that score.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800">
-                What most influenced the result
+
+            <div className="mt-8" style={{ height: groupedDrivers.length * 58 + 24 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={groupedDrivers}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(17,33,38,0.08)" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 11, fontWeight: 600 }}
+                    width={115}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "18px",
+                      border: "1px solid rgba(17, 33, 38, 0.08)",
+                      boxShadow: "0 20px 40px rgba(17, 33, 38, 0.10)",
+                    }}
+                    formatter={(value, _, payload) => {
+                      const numericValue = Number(
+                        Array.isArray(value) ? value[0] : value ?? 0
+                      );
+                      const point = payload?.payload as
+                        | { featureCount?: number }
+                        | undefined;
+                      return [
+                        `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(4)}`,
+                        `${point?.featureCount ?? 0} related feature${
+                          point?.featureCount === 1 ? "" : "s"
+                        }`,
+                      ];
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={30}>
+                    {groupedDrivers.map((entry) => (
+                      <Cell
+                        key={entry.name}
+                        fill={entry.value >= 0 ? "#8e4b43" : "#2f6a55"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+
+          <div className="space-y-6">
+            <Panel tone="strong">
+              <StatusPill tone={riskTone(risk)}>{risk}</StatusPill>
+              <h2 className="mt-5 font-display text-4xl text-[#f8f5ef]">
+                {predictionLabel(prediction.prediction)}
               </h2>
-              <p className="text-sm text-gray-500">
-                Red bars pushed the model&apos;s risk score up. Green bars pulled
-                it down.
+              <p className="mt-3 text-sm leading-7 text-[rgba(248,245,239,0.74)]">
+                {confidenceLabel(prediction.confidence)} using{" "}
+                {formatModelName(model || "xgboost")}
+              </p>
+              <div className="mt-8 space-y-3">
+                <div className="data-row !border-[rgba(248,245,239,0.08)] !text-[rgba(248,245,239,0.72)]">
+                  <span>Probability</span>
+                  <span className="font-semibold text-[#f8f5ef]">
+                    {(prediction.probability * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="data-row !border-[rgba(248,245,239,0.08)] !text-[rgba(248,245,239,0.72)]">
+                  <span>Confidence</span>
+                  <span className="font-semibold text-[#f8f5ef]">
+                    {(prediction.confidence * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            </Panel>
+
+            <Panel>
+              <h2 className="text-xl font-semibold text-[var(--text-strong)]">
+                Main reasons the score increased
+              </h2>
+              <div className="mt-5 space-y-3">
+                {strongestIncreases.map((item) => (
+                  <div
+                    key={item.name}
+                    className="rounded-[22px] border border-[rgba(142,75,67,0.16)] bg-[rgba(142,75,67,0.1)] px-4 py-4"
+                  >
+                    <p className="font-semibold text-[var(--danger)]">{item.name}</p>
+                    <p className="mt-2 text-sm leading-7 text-[rgba(142,75,67,0.92)]">
+                      {buildDriverSentence(item)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            <Panel tone="muted">
+              <h2 className="text-xl font-semibold text-[var(--text-strong)]">
+                Main reasons the score decreased
+              </h2>
+              <div className="mt-5 space-y-3">
+                {strongestDecreases.map((item) => (
+                  <div
+                    key={item.name}
+                    className="rounded-[22px] border border-[rgba(47,106,85,0.16)] bg-[rgba(47,106,85,0.1)] px-4 py-4"
+                  >
+                    <p className="font-semibold text-[var(--success)]">{item.name}</p>
+                    <p className="mt-2 text-sm leading-7 text-[rgba(47,106,85,0.92)]">
+                      {buildDriverSentence(item)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        </div>
+
+        <Panel>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="eyebrow">Advanced detail</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[var(--text-strong)]">
+                Raw feature-level SHAP contributions
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--text-muted)]">
+                This table preserves the technical layer beneath the grouped
+                explanation so reviewers can connect individual features to the
+                summarized story.
               </p>
             </div>
+            <LinkButton href="/prediction" variant="secondary">
+              Back to prediction summary
+            </LinkButton>
           </div>
 
-          <div style={{ height: groupedDrivers.length * 58 + 24 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={groupedDrivers}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fontSize: 11, fontWeight: 600 }}
-                  width={115}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "12px",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                  }}
-                  formatter={(value, _, payload) => {
-                    const numericValue = Number(
-                      Array.isArray(value) ? value[0] : value ?? 0
-                    );
-                    const point = payload?.payload as
-                      | { featureCount?: number }
-                      | undefined;
-                    return [
-                      `${numericValue > 0 ? "+" : ""}${numericValue.toFixed(4)}`,
-                      `${point?.featureCount ?? 0} related feature${
-                        point?.featureCount === 1 ? "" : "s"
-                      }`,
-                    ];
-                  }}
-                />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={30}>
-                  {groupedDrivers.map((entry) => (
-                    <Cell
-                      key={entry.name}
-                      fill={entry.value >= 0 ? "#ef4444" : "#16a34a"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Prediction summary
-            </h2>
-            <div
-              className={`inline-flex items-center gap-2 text-sm font-medium px-4 py-1.5 rounded-full mb-4 ${riskToneClass(
-                risk
-              )}`}
-            >
-              {risk}
-            </div>
-            <p className="text-2xl font-bold text-gray-900">
-              {predictionLabel(prediction.prediction)}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {confidenceLabel(prediction.confidence)} &middot;{" "}
-              {formatModelName(model || "xgboost")}
-            </p>
-            <div className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between bg-gray-50 rounded-lg px-4 py-2">
-                <span className="text-gray-500">Probability</span>
-                <span className="font-semibold text-gray-800">
-                  {(prediction.probability * 100).toFixed(1)}%
-                </span>
-              </div>
-              <div className="flex justify-between bg-gray-50 rounded-lg px-4 py-2">
-                <span className="text-gray-500">Confidence</span>
-                <span className="font-semibold text-gray-800">
-                  {(prediction.confidence * 100).toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Main reasons the score increased
-            </h2>
-            <div className="space-y-3">
-              {strongestIncreases.map((item) => (
-                <div key={item.name} className="bg-red-50 rounded-xl px-4 py-3">
-                  <p className="font-semibold text-red-700">{item.name}</p>
-                  <p className="text-sm text-red-600 mt-1">
-                    {buildDriverSentence(item)}
-                  </p>
-                </div>
-              ))}
-              {strongestIncreases.length === 0 && (
-                <p className="text-sm text-gray-500">
-                  No grouped drivers pushed the score upward.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Main reasons the score decreased
-            </h2>
-            <div className="space-y-3">
-              {strongestDecreases.map((item) => (
-                <div key={item.name} className="bg-green-50 rounded-xl px-4 py-3">
-                  <p className="font-semibold text-green-700">{item.name}</p>
-                  <p className="text-sm text-green-600 mt-1">
-                    {buildDriverSentence(item)}
-                  </p>
-                </div>
-              ))}
-              {strongestDecreases.length === 0 && (
-                <p className="text-sm text-gray-500">
-                  No grouped drivers pulled the score downward.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <details className="bg-white rounded-2xl p-6 shadow-sm border border-blue-50">
-        <summary className="cursor-pointer text-lg font-semibold text-gray-800">
-          Advanced details
-        </summary>
-        <p className="text-sm text-gray-500 mt-3 mb-4">
-          Raw feature-level SHAP details for the latest analyzed sample.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-sm font-semibold text-gray-600 pb-4">
-                  Raw feature
-                </th>
-                <th className="text-left text-sm font-semibold text-gray-600 pb-4">
-                  Friendly group
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  Sample value
-                </th>
-                <th className="text-center text-sm font-semibold text-gray-600 pb-4">
-                  SHAP contribution
-                </th>
-                <th className="text-left text-sm font-semibold text-gray-600 pb-4">
-                  Direction
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {advancedRows.map((row) => (
-                <tr key={row.featureName} className="border-b border-gray-50">
-                  <td className="py-4 font-medium text-gray-800">{row.featureName}</td>
-                  <td className="py-4 text-gray-600">{row.displayGroup}</td>
-                  <td className="py-4 text-center font-semibold text-gray-800">
-                    {row.featureValue === null ? "N/A" : row.featureValue.toFixed(4)}
-                  </td>
-                  <td
-                    className={`py-4 text-center font-semibold ${
-                      row.shapValue >= 0 ? "text-red-600" : "text-green-600"
-                    }`}
-                  >
-                    {row.shapValue >= 0 ? "+" : ""}
-                    {row.shapValue.toFixed(4)}
-                  </td>
-                  <td className="py-4 text-sm text-gray-600">
-                    {formatShapDirection(row.shapValue)}
-                  </td>
+          <div className="table-shell mt-8 overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th className="text-left">Raw feature</th>
+                  <th className="text-left">Friendly group</th>
+                  <th className="text-center">Sample value</th>
+                  <th className="text-center">SHAP contribution</th>
+                  <th className="text-left">Direction</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+              </thead>
+              <tbody>
+                {advancedRows.map((row) => (
+                  <tr key={row.featureName}>
+                    <td className="font-medium">{row.featureName}</td>
+                    <td>{row.displayGroup}</td>
+                    <td className="text-center">
+                      {row.featureValue === null ? "N/A" : row.featureValue.toFixed(4)}
+                    </td>
+                    <td
+                      className={`text-center font-semibold ${
+                        row.shapValue >= 0
+                          ? "text-[var(--danger)]"
+                          : "text-[var(--success)]"
+                      }`}
+                    >
+                      {row.shapValue >= 0 ? "+" : ""}
+                      {row.shapValue.toFixed(4)}
+                    </td>
+                    <td>{formatShapDirection(row.shapValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
 
-      <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-700">
-        These explanations describe what influenced the model&apos;s score for
-        this sample. They do not identify a medical cause or replace a clinical
-        diagnosis.
-      </div>
+        <div className="callout-warning">
+          These explanations describe what influenced the model&apos;s score for
+          this sample. They do not identify a medical cause or replace a
+          clinical diagnosis.
+        </div>
+      </SiteContainer>
     </div>
   );
 }
