@@ -1,5 +1,6 @@
 # Claude AI
 .claude/
+.playwright-cli/
 
 # Python
 __pycache__/
@@ -20,6 +21,11 @@ build/
 *.pkl
 *.h5
 *.joblib
+.deps/
+.runtime_deps/
+!backend/models/
+!backend/models/*.pkl
+!backend/models/*.json
 
 # Node.js / Next.js
 node_modules/
@@ -33,13 +39,24 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.vercel
+.turbo
+.pnp*
+.yarn/
+! .yarn/patches
+! .yarn/plugins
+! .yarn/releases
+! .yarn/versions
+next-env.d.ts
 
-# Data files
+# Data and Artifacts
 *.csv
 *.parquet
 *.feather
 data/raw/
 data/processed/
+output/
+coverage/
 
 # Jupyter Notebooks checkpoints
 .ipynb_checkpoints/
