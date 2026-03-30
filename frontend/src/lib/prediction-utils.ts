@@ -95,12 +95,22 @@ export function confidenceLabel(confidence: number): string {
 
 export function riskToneClass(risk: string): string {
   if (risk === "High Risk") {
-    return "bg-red-50 text-red-600";
+    return "status-pill-critical";
   }
   if (risk === "Medium Risk") {
-    return "bg-yellow-50 text-yellow-600";
+    return "status-pill-caution";
   }
-  return "bg-green-50 text-green-600";
+  return "status-pill-positive";
+}
+
+export function riskTone(risk: string): "critical" | "caution" | "positive" {
+  if (risk === "High Risk") {
+    return "critical";
+  }
+  if (risk === "Medium Risk") {
+    return "caution";
+  }
+  return "positive";
 }
 
 export function buildShapChartData(
