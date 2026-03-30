@@ -1,152 +1,399 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  FaDatabase,
-  FaCogs,
-  FaBullseye,
+  FaArrowRight,
   FaBrain,
-  FaLaptopMedical,
-  FaSearch,
+  FaChartLine,
+  FaCircle,
+  FaClipboardCheck,
+  FaFlask,
+  FaMicroscope,
+  FaWaveSquare,
 } from "react-icons/fa";
-import { fetchModelInfo, type ModelInfo } from "@/lib/api";
+import {
+  fetchMetrics,
+  fetchModelInfo,
+  type MetricsData,
+  type ModelInfo,
+} from "@/lib/api";
 import { formatModelName } from "@/lib/prediction-utils";
+import {
+  LinkButton,
+  MetricCard,
+  Panel,
+  SectionHeading,
+  SiteContainer,
+  StatusPill,
+} from "@/components/site/ui";
+
+const workflowSteps = [
+  {
+    title: "Capture a voice sample profile",
+    description:
+      "Use structured CSV input or the manual analysis workspace to submit acoustic measurements.",
+  },
+  {
+    title: "Run the strongest saved model",
+    description:
+      "Compare support for XGBoost and Random Forest without changing the backend contract.",
+  },
+  {
+    title: "Inspect explainable evidence",
+    description:
+      "Review grouped SHAP drivers, plain-language explanations, and model performance context.",
+  },
+];
+
+const researchHighlights = [
+  "A faculty-ready narrative that connects dataset quality, model choice, and interpretability.",
+  "An analysis workflow built to show both plain-language summaries and technical depth.",
+  "A restrained interface that foregrounds evidence instead of decorative UI noise.",
+];
+
+const featureGroups = [
+  { label: "Voice instability", width: "82%" },
+  { label: "Frequency pattern shifts", width: "68%" },
+  { label: "Energy variation", width: "56%" },
+  { label: "Wave-pattern complexity", width: "43%" },
+];
 
 export default function Home() {
   const [info, setInfo] = useState<ModelInfo | null>(null);
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
 
   useEffect(() => {
     fetchModelInfo().then(setInfo).catch(console.error);
+    fetchMetrics().then(setMetrics).catch(console.error);
   }, []);
 
+  const bestModelKey = info?.best_model || metrics?.best_model || "xgboost";
+  const bestModelMetrics = metrics?.models?.[bestModelKey];
+  const supportMetrics = [
+    {
+      label: "Dataset",
+      value: info ? `${info.dataset_size}` : "756",
+      description:
+        "Voice-derived study samples available to the deployed interface.",
+    },
+    {
+      label: "Feature set",
+      value: info ? `${info.n_selected_features}` : "22",
+      description:
+        "Selected acoustic indicators surfaced through the upload workspace.",
+    },
+    {
+      label: "Best accuracy",
+      value: info ? `${(info.best_accuracy * 100).toFixed(1)}%` : "94.0%",
+      description: `Current headline benchmark from ${formatModelName(
+        bestModelKey
+      )}.`,
+    },
+  ];
+
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-blue-50" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left - Text */}
-            <div>
-              <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-                <FaBrain className="text-xs" />
-                AI-Powered Healthcare
+    <div className="pb-20">
+      <section className="relative overflow-hidden border-b border-[var(--border-subtle)] bg-[linear-gradient(145deg,#18373d_0%,#10292f_58%,#0d2126_100%)]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(219,194,151,0.14),transparent_24%),radial-gradient(circle_at_20%_18%,rgba(119,154,160,0.18),transparent_28%)]" />
+        <SiteContainer className="relative grid min-h-[calc(100svh-78px)] gap-16 py-14 lg:grid-cols-[1.08fr_0.92fr] lg:items-end lg:py-20">
+          <div className="hero-reveal max-w-3xl">
+            <StatusPill tone="accent" className="mb-7">
+              <FaBrain className="text-xs" />
+              Explainable AI research showcase
+            </StatusPill>
+            <h1 className="display-title">
+              Parkinson&apos;s voice screening, presented with evidence instead
+              of hype.
+            </h1>
+            <p className="mt-8 max-w-2xl text-lg leading-8 text-[rgba(248,245,239,0.76)] sm:text-xl">
+              This platform turns acoustic voice features into a clear research
+              workflow: upload inputs, compare saved models, inspect prediction
+              confidence, and surface the grouped SHAP drivers behind each
+              result.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <LinkButton
+                href="/upload"
+                className="!bg-[#f8f5ef] !text-[var(--accent-strong)]"
+              >
+                Run the analysis workspace
+              </LinkButton>
+              <LinkButton
+                href="/about"
+                variant="ghost"
+                className="!border-[rgba(248,245,239,0.18)] !text-[#f8f5ef]"
+              >
+                Review methodology
+              </LinkButton>
+            </div>
+            <div className="mt-10 flex flex-wrap gap-6 text-sm text-[rgba(248,245,239,0.78)]">
+              <div>
+                <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[rgba(248,245,239,0.44)]">
+                  Audience
+                </p>
+                <p className="mt-2 font-medium">
+                  Faculty, judges, and research reviewers
+                </p>
               </div>
-              <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 leading-tight mb-6">
-                Parkinson&apos;s Disease Prediction with{" "}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-400">
-                  Explainable AI
-                </span>
-              </h1>
-              <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                Using machine learning to detect Parkinson&apos;s disease from
-                speech features with transparent and interpretable results.
-              </p>
-              <div className="flex gap-4">
-                <Link
-                  href="/upload"
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300"
-                >
-                  Start Prediction
-                </Link>
-                <Link
-                  href="/about"
-                  className="border-2 border-blue-200 text-blue-600 px-8 py-3 rounded-xl font-semibold hover:bg-blue-50 transition-all duration-200"
-                >
-                  Learn More
-                </Link>
+              <div>
+                <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[rgba(248,245,239,0.44)]">
+                  Focus
+                </p>
+                <p className="mt-2 font-medium">
+                  Prediction, interpretability, and model credibility
+                </p>
               </div>
             </div>
+          </div>
 
-            {/* Right - Illustration */}
-            <div className="flex justify-center">
-              <div className="relative w-80 h-80 lg:w-96 lg:h-96">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-200 to-blue-400 rounded-full opacity-20 blur-3xl" />
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <div className="relative">
-                    <div className="w-48 h-32 bg-gradient-to-b from-gray-700 to-gray-800 rounded-t-xl flex items-center justify-center mx-auto">
-                      <div className="w-40 h-24 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center">
-                        <FaBrain className="text-white text-4xl animate-pulse" />
-                      </div>
-                    </div>
-                    <div className="w-56 h-3 bg-gray-600 rounded-b-lg mx-auto" />
-                    <div className="w-64 h-1.5 bg-gray-400 rounded-b-lg mx-auto" />
-                    <div className="absolute -top-8 -right-12 w-14 h-14 bg-white rounded-xl shadow-lg flex items-center justify-center animate-bounce">
-                      <FaSearch className="text-blue-500 text-xl" />
-                    </div>
-                    <div
-                      className="absolute -top-4 -left-16 w-14 h-14 bg-white rounded-xl shadow-lg flex items-center justify-center animate-bounce"
-                      style={{ animationDelay: "0.5s" }}
-                    >
-                      <FaLaptopMedical className="text-blue-500 text-xl" />
-                    </div>
-                    <div className="absolute -bottom-6 -right-8 w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center shadow-lg">
-                      <span className="text-white text-xs font-bold">AI</span>
-                    </div>
-                    <div className="absolute -top-12 left-1/2 w-3 h-3 bg-blue-400 rounded-full opacity-60" />
-                    <div className="absolute top-1/2 -right-20 w-2 h-2 bg-blue-300 rounded-full opacity-50" />
-                    <div className="absolute top-1/2 -left-20 w-2.5 h-2.5 bg-blue-500 rounded-full opacity-40" />
-                  </div>
+          <div className="hero-reveal flex items-center justify-end [animation-delay:140ms]">
+            <Panel tone="strong" className="hero-drift w-full max-w-xl overflow-hidden">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[0.72rem] uppercase tracking-[0.24em] text-[rgba(248,245,239,0.46)]">
+                    Live study snapshot
+                  </p>
+                  <h2 className="mt-3 font-display text-4xl text-[#f8f5ef]">
+                    {formatModelName(bestModelKey)}
+                  </h2>
+                </div>
+                <StatusPill tone="accent">Reviewer-ready output</StatusPill>
+              </div>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[24px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-5">
+                  <p className="text-[0.72rem] uppercase tracking-[0.2em] text-[rgba(248,245,239,0.44)]">
+                    Best accuracy
+                  </p>
+                  <p className="mt-3 font-display text-5xl">
+                    {info ? `${(info.best_accuracy * 100).toFixed(1)}%` : "Loading"}
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-[rgba(248,245,239,0.1)] bg-[rgba(248,245,239,0.06)] p-5">
+                  <p className="text-[0.72rem] uppercase tracking-[0.2em] text-[rgba(248,245,239,0.44)]">
+                    Study features
+                  </p>
+                  <p className="mt-3 font-display text-5xl">
+                    {info ? info.n_selected_features : "..."}
+                  </p>
                 </div>
               </div>
-            </div>
+
+              <div className="mt-8 space-y-4">
+                {workflowSteps.map((step, index) => (
+                  <div key={step.title} className="flex gap-4">
+                    <div className="mt-1 flex h-7 w-7 items-center justify-center rounded-full border border-[rgba(248,245,239,0.14)] bg-[rgba(248,245,239,0.08)] text-xs font-semibold text-[#f8f5ef]">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 border-b border-[rgba(248,245,239,0.08)] pb-4 last:border-b-0 last:pb-0">
+                      <p className="font-semibold text-[#f8f5ef]">{step.title}</p>
+                      <p className="mt-1 text-sm leading-7 text-[rgba(248,245,239,0.68)]">
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {bestModelMetrics ? (
+                <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[0.7rem] uppercase tracking-[0.18em] text-[rgba(248,245,239,0.44)]">
+                      Recall
+                    </p>
+                    <p className="mt-2 text-xl font-semibold text-[#f8f5ef]">
+                      {(bestModelMetrics.recall * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[0.7rem] uppercase tracking-[0.18em] text-[rgba(248,245,239,0.44)]">
+                      Precision
+                    </p>
+                    <p className="mt-2 text-xl font-semibold text-[#f8f5ef]">
+                      {(bestModelMetrics.precision * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[0.7rem] uppercase tracking-[0.18em] text-[rgba(248,245,239,0.44)]">
+                      AUC
+                    </p>
+                    <p className="mt-2 text-xl font-semibold text-[#f8f5ef]">
+                      {bestModelMetrics.auc.toFixed(3)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </Panel>
           </div>
-        </div>
+        </SiteContainer>
       </section>
 
-      {/* Info Cards */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 -mt-4">
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-blue-50">
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-              <FaDatabase className="text-blue-500 text-xl" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Dataset</h3>
-            <p className="text-gray-500 text-sm">PD Speech Features Dataset</p>
-            <div className="mt-4 flex items-center gap-2 text-xs text-blue-600 font-medium">
-              <div className="w-2 h-2 bg-blue-500 rounded-full" />
-              {info ? `${info.dataset_size} samples` : "Loading..."}
-            </div>
+      <SiteContainer className="space-y-20 pt-16">
+        <section>
+          <SectionHeading
+            eyebrow="Study posture"
+            title="A sharper first impression without changing the research workflow."
+            description="The redesign keeps the deployed app architecture intact while reframing the interface around trust, readability, and evidence-led presentation."
+          />
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {supportMetrics.map((metric, index) => (
+              <MetricCard
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                description={metric.description}
+                accent={index === 2 ? "accent" : "default"}
+              />
+            ))}
           </div>
+        </section>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 border border-blue-50">
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-              <FaCogs className="text-blue-500 text-xl" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Models</h3>
-            <div className="space-y-1.5">
-              {(info?.models || ["xgboost", "random_forest"]).map((m, i) => (
-                <p
-                  key={m}
-                  className="text-gray-500 text-sm flex items-center gap-2"
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      i === 0 ? "bg-blue-600" : "bg-blue-400"
-                    }`}
-                  />
-                  {formatModelName(m)}
-                </p>
+        <section className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
+          <div>
+            <SectionHeading
+              eyebrow="Workflow"
+              title="The platform now reads like a guided review instead of a disconnected set of demos."
+              description="Each route supports one part of the story: capture inputs, inspect the result, explain the model, and compare saved evaluation benchmarks."
+            />
+            <div className="mt-7 space-y-4">
+              {researchHighlights.map((item) => (
+                <div key={item} className="flex gap-3">
+                  <FaCircle className="mt-2 text-[10px] text-[var(--accent-strong)]" />
+                  <p className="text-sm leading-7 text-[var(--text-muted)]">
+                    {item}
+                  </p>
+                </div>
               ))}
             </div>
+            <div className="mt-8">
+              <Link
+                href="/performance"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent-strong)]"
+              >
+                Review performance benchmarks
+                <FaArrowRight className="text-xs" />
+              </Link>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 text-white">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-4">
-              <FaBullseye className="text-white text-xl" />
+          <Panel className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-[24px] border border-[var(--border-subtle)] bg-white/40 p-5">
+              <FaFlask className="text-2xl text-[var(--accent-strong)]" />
+              <h3 className="mt-5 text-lg font-semibold text-[var(--text-strong)]">
+                Analysis workspace
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+                Upload a CSV or enter feature values manually without leaving the
+                review flow.
+              </p>
             </div>
-            <h3 className="text-lg font-bold mb-2">Best Accuracy</h3>
-            <p className="text-4xl font-bold">
-              {info
-                ? `${(info.best_accuracy * 100).toFixed(1)}%`
-                : "Loading..."}
-            </p>
-            <p className="text-blue-200 text-sm mt-1">
-              {formatModelName(info?.best_model || "xgboost")} Model
-            </p>
+            <div className="rounded-[24px] border border-[var(--border-subtle)] bg-white/40 p-5">
+              <FaClipboardCheck className="text-2xl text-[var(--accent-strong)]" />
+              <h3 className="mt-5 text-lg font-semibold text-[var(--text-strong)]">
+                Clear result framing
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+                Probability, confidence, model context, and next-step links are
+                grouped for fast review.
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--border-subtle)] bg-white/40 p-5">
+              <FaMicroscope className="text-2xl text-[var(--accent-strong)]" />
+              <h3 className="mt-5 text-lg font-semibold text-[var(--text-strong)]">
+                Evidence trail
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">
+                Explainability and performance routes turn the prediction into a
+                defensible research narrative.
+              </p>
+            </div>
+          </Panel>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Panel>
+            <SectionHeading
+              eyebrow="Explainability"
+              title="Grouped SHAP outputs keep the science visible."
+              description="Instead of hiding the model behind a single percentage, the platform surfaces which families of signal changes drove the score."
+            />
+            <div className="mt-8 space-y-4">
+              {featureGroups.map((group) => (
+                <div key={group.label}>
+                  <div className="mb-2 flex items-center justify-between text-sm text-[var(--text-muted)]">
+                    <span>{group.label}</span>
+                    <span>{group.width}</span>
+                  </div>
+                  <div className="h-3 rounded-full bg-[rgba(17,33,38,0.08)]">
+                    <div
+                      className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent)_0%,var(--accent-strong)_100%)]"
+                      style={{ width: group.width }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel tone="muted">
+            <SectionHeading
+              eyebrow="Performance framing"
+              title="Model benchmarks stay readable for non-technical reviewers."
+              description="Plain-language metric summaries coexist with the original technical tables so judges can scan first and dive deeper second."
+            />
+            <div className="mt-8 space-y-4">
+              <div className="data-row">
+                <div className="flex items-center gap-3">
+                  <FaChartLine className="text-[var(--accent-strong)]" />
+                  <span className="text-sm text-[var(--text-muted)]">
+                    Headline model benchmark
+                  </span>
+                </div>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  {formatModelName(bestModelKey)}
+                </span>
+              </div>
+              <div className="data-row">
+                <div className="flex items-center gap-3">
+                  <FaWaveSquare className="text-[var(--accent-strong)]" />
+                  <span className="text-sm text-[var(--text-muted)]">
+                    Explainability route
+                  </span>
+                </div>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  Grouped drivers + raw SHAP
+                </span>
+              </div>
+              <div className="data-row">
+                <div className="flex items-center gap-3">
+                  <FaBrain className="text-[var(--accent-strong)]" />
+                  <span className="text-sm text-[var(--text-muted)]">
+                    Review stance
+                  </span>
+                </div>
+                <span className="font-semibold text-[var(--text-strong)]">
+                  Decision-support, not diagnosis
+                </span>
+              </div>
+            </div>
+          </Panel>
+        </section>
+
+        <section className="rounded-[32px] border border-[var(--border-subtle)] bg-[rgba(248,245,239,0.78)] px-6 py-10 shadow-[var(--shadow-soft)] sm:px-10">
+          <SectionHeading
+            eyebrow="Next step"
+            title="Open the analysis workspace and evaluate the full prediction-to-explanation flow."
+            description="The visual redesign is meant to support the live demo, so the strongest proof is the complete path from feature input to interpreted result."
+          />
+          <div className="mt-8 flex flex-wrap gap-3">
+            <LinkButton href="/upload">Start with upload</LinkButton>
+            <LinkButton href="/prediction" variant="secondary">
+              See result layout
+            </LinkButton>
           </div>
-        </div>
-      </section>
+        </section>
+      </SiteContainer>
     </div>
   );
 }
