@@ -1,23 +1,57 @@
 "use client";
-import { createContext, useContext, useState, ReactNode } from "react";
-import type { PredictionResult } from "@/lib/api";
+import { ReactNode, createContext, startTransition, useContext, useState } from "react";
+import type { ExplanationResult, PredictionResult } from "@/lib/api";
 
-interface PredictionContextType {
-  lastPrediction: PredictionResult | null;
-  setLastPrediction: (p: PredictionResult | null) => void;
+export interface PredictionBundle {
+  prediction: PredictionResult | null;
+  explanation: ExplanationResult | null;
+  features: Record<string, number> | null;
+  model: string | null;
+  uploadedFileName: string | null;
 }
 
+interface PredictionContextType extends PredictionBundle {
+  setPredictionBundle: (bundle: PredictionBundle | null) => void;
+  clearPrediction: () => void;
+}
+
+const emptyPrediction: PredictionBundle = {
+  prediction: null,
+  explanation: null,
+  features: null,
+  model: null,
+  uploadedFileName: null,
+};
+
 const PredictionContext = createContext<PredictionContextType>({
-  lastPrediction: null,
-  setLastPrediction: () => {},
+  ...emptyPrediction,
+  setPredictionBundle: () => {},
+  clearPrediction: () => {},
 });
 
 export function PredictionProvider({ children }: { children: ReactNode }) {
-  const [lastPrediction, setLastPrediction] =
-    useState<PredictionResult | null>(null);
+  const [bundle, setBundle] = useState<PredictionBundle>(emptyPrediction);
+
+  const setPredictionBundle = (nextBundle: PredictionBundle | null) => {
+    startTransition(() => {
+      setBundle(nextBundle ?? emptyPrediction);
+    });
+  };
+
+  const clearPrediction = () => {
+    startTransition(() => {
+      setBundle(emptyPrediction);
+    });
+  };
 
   return (
-    <PredictionContext.Provider value={{ lastPrediction, setLastPrediction }}>
+    <PredictionContext.Provider
+      value={{
+        ...bundle,
+        setPredictionBundle,
+        clearPrediction,
+      }}
+    >
       {children}
     </PredictionContext.Provider>
   );
