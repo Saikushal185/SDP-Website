@@ -1,161 +1,148 @@
 """
-Flask API for Parkinson's Disease Prediction Dashboard
+Flask API for Parkinson's disease prediction, explainability, and metrics.
 
-Serves real ML predictions, SHAP explanations, and performance metrics
-using models trained from the research pipeline.
+The app loads persisted training artifacts once on startup and serves JSON
+responses that the Next.js frontend can render directly.
 """
 
-import os
-import logging
-import threading
+from __future__ import annotations
 
-from flask import Flask, request, jsonify
+import logging
+from pathlib import Path
+from typing import Any, Mapping
+
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-import pandas as pd
 
 from ml_pipeline import MLPipeline
 
-# Setup logging
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-CORS(app)
-
-# Resolve project root (parent of backend/)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Initialize ML pipeline
-pipeline = MLPipeline(PROJECT_ROOT)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def init_models():
-    """Train models in a background thread so the server starts quickly."""
-    try:
-        pipeline.init_pipeline()
-    except Exception as e:
-        logger.error(f"Failed to initialize ML pipeline: {e}", exc_info=True)
+def _extract_features_payload(payload: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
+    model_name = str(payload.get("model", "xgboost"))
+
+    if "features" in payload:
+        features = payload.get("features")
+    else:
+        features = {key: value for key, value in payload.items() if key != "model"}
+
+    if not isinstance(features, dict) or not features:
+        raise ValueError("No features provided in the request body.")
+
+    return features, model_name
 
 
-# Start training in background
-init_thread = threading.Thread(target=init_models, daemon=True)
-init_thread.start()
+def create_app(pipeline_override: MLPipeline | None = None) -> Flask:
+    app = Flask(__name__)
+    CORS(app)
+
+    pipeline = pipeline_override or MLPipeline(str(PROJECT_ROOT))
+    if pipeline_override is None:
+        try:
+            pipeline.load_artifacts()
+        except Exception as exc:
+            pipeline.startup_error = str(exc)
+            pipeline.is_ready = False
+            logger.error("Failed to load model artifacts: %s", exc, exc_info=True)
+
+    app.config["PIPELINE"] = pipeline
+
+    @app.before_request
+    def ensure_pipeline_ready():
+        if request.path in {"/health"}:
+            return None
+
+        active_pipeline: MLPipeline = app.config["PIPELINE"]
+        if active_pipeline.is_ready:
+            return None
+
+        return (
+            jsonify(
+                {
+                    "error": active_pipeline.startup_error
+                    or "Model artifacts are not loaded yet."
+                }
+            ),
+            503,
+        )
+
+    @app.get("/health")
+    def health():
+        active_pipeline: MLPipeline = app.config["PIPELINE"]
+        return jsonify(
+            {
+                "status": "ok",
+                "models_loaded": active_pipeline.is_ready,
+                "error": active_pipeline.startup_error,
+            }
+        )
+
+    @app.get("/features")
+    @app.get("/api/features")
+    def get_features():
+        active_pipeline: MLPipeline = app.config["PIPELINE"]
+        return jsonify(active_pipeline.get_features_metadata())
+
+    @app.post("/predict")
+    @app.post("/api/predict")
+    def predict():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Request body must be valid JSON."}), 400
+
+        try:
+            features, model_name = _extract_features_payload(payload)
+            active_pipeline: MLPipeline = app.config["PIPELINE"]
+            return jsonify(active_pipeline.predict(features, model_name))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            logger.error("Prediction failed: %s", exc, exc_info=True)
+            return jsonify({"error": "Prediction failed."}), 500
+
+    @app.post("/explain")
+    @app.post("/api/explain")
+    def explain():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Request body must be valid JSON."}), 400
+
+        try:
+            features, model_name = _extract_features_payload(payload)
+            active_pipeline: MLPipeline = app.config["PIPELINE"]
+            return jsonify(active_pipeline.explain(features, model_name))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            logger.error("Explainability failed: %s", exc, exc_info=True)
+            return jsonify({"error": "Explainability failed."}), 500
+
+    @app.get("/metrics")
+    @app.get("/api/metrics")
+    @app.get("/api/performance")
+    def metrics():
+        active_pipeline: MLPipeline = app.config["PIPELINE"]
+        return jsonify(active_pipeline.get_metrics())
+
+    @app.get("/model-info")
+    @app.get("/api/model-info")
+    def model_info():
+        active_pipeline: MLPipeline = app.config["PIPELINE"]
+        return jsonify(active_pipeline.get_model_info())
+
+    return app
 
 
-@app.before_request
-def check_ready():
-    """Return 503 if models are still loading (except for /health)."""
-    if request.path == "/health":
-        return None
-    if not pipeline.is_ready:
-        return jsonify({
-            "error": "Models are still loading. Please try again in a few seconds."
-        }), 503
-
-
-# ─── Health Check ────────────────────────────────────────────────────────────
-
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({
-        "status": "ok",
-        "models_loaded": pipeline.is_ready
-    })
-
-
-# ─── Feature Names ──────────────────────────────────────────────────────────
-
-@app.route("/api/features", methods=["GET"])
-def get_features():
-    """Return the list of selected feature names for the input form."""
-    return jsonify({
-        "selected_features": pipeline.selected_feature_names,
-        "all_features": pipeline.all_feature_names,
-        "n_selected": len(pipeline.selected_feature_names),
-        "sample_data": pipeline.sample_data
-    })
-
-
-# ─── Single Prediction ──────────────────────────────────────────────────────
-
-@app.route("/api/predict", methods=["POST"])
-def predict():
-    """Predict from manually entered features."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No input data provided"}), 400
-
-    features = data.get("features", {})
-    model_name = data.get("model", "XGBoost")
-
-    if not features:
-        return jsonify({"error": "No features provided"}), 400
-
-    try:
-        result = pipeline.predict(features, model_name)
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Prediction error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
-# ─── CSV Prediction ──────────────────────────────────────────────────────────
-
-@app.route("/api/predict-csv", methods=["POST"])
-def predict_csv():
-    """Predict from an uploaded CSV file."""
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
-    file = request.files["file"]
-    if not file.filename or not file.filename.endswith(".csv"):
-        return jsonify({"error": "Please upload a CSV file"}), 400
-
-    try:
-        df = pd.read_csv(file)
-
-        if len(df) > 1000:
-            return jsonify({
-                "error": "CSV too large. Maximum 1000 rows allowed."
-            }), 400
-
-        result = pipeline.predict_csv(df)
-
-        if "error" in result:
-            return jsonify(result), 400
-
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"CSV prediction error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-
-# ─── Performance Metrics ─────────────────────────────────────────────────────
-
-@app.route("/api/performance", methods=["GET"])
-def performance():
-    """Return cross-validation metrics and ROC data."""
-    return jsonify(pipeline.get_performance_metrics())
-
-
-# ─── Explainability ──────────────────────────────────────────────────────────
-
-@app.route("/api/explainability", methods=["GET"])
-def explainability():
-    """Return feature importance and global SHAP values."""
-    return jsonify(pipeline.get_feature_importance())
-
-
-# ─── Model Info ──────────────────────────────────────────────────────────────
-
-@app.route("/api/model-info", methods=["GET"])
-def model_info():
-    """Return dataset and model metadata."""
-    return jsonify(pipeline.get_model_info())
+app = create_app()
 
 
 if __name__ == "__main__":
